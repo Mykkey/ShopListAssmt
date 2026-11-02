@@ -8,7 +8,9 @@ import androidx.recyclerview.widget.RecyclerView
 import com.mmgpt.shoplistgpt.ShoppingCategory
 import com.mmgpt.shoplistgpt.databinding.ItemCategorySummaryBinding
 
-class CategorySummaryAdapter : ListAdapter<ShoppingCategory, CategorySummaryAdapter.ViewHolder>(DIFF_CALLBACK) {
+class CategorySummaryAdapter(
+    private val onRowDoubleTap: ((ShoppingCategory) -> Unit)? = null
+) : ListAdapter<ShoppingCategory, CategorySummaryAdapter.ViewHolder>(DIFF_CALLBACK) {
 
     init {
         setHasStableIds(true)
@@ -16,7 +18,14 @@ class CategorySummaryAdapter : ListAdapter<ShoppingCategory, CategorySummaryAdap
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val binding = ItemCategorySummaryBinding.inflate(LayoutInflater.from(parent.context), parent, false)
-        return ViewHolder(binding)
+        return ViewHolder(binding).also { holder ->
+            onRowDoubleTap?.let { callback ->
+                holder.itemView.setOnRowDoubleTapListener {
+                    val position = holder.bindingAdapterPosition
+                    if (position != RecyclerView.NO_POSITION) callback(getItem(position))
+                }
+            }
+        }
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {

@@ -9,6 +9,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.mmgpt.shoplistgpt.Mode
 import com.mmgpt.shoplistgpt.ShoppingItem
 import com.mmgpt.shoplistgpt.databinding.ItemShoppingBinding
 import com.mmgpt.shoplistgpt.databinding.ItemAddBinding
@@ -17,7 +18,8 @@ class ItemAdapter(
     private val onAction: (ShoppingItem, Action) -> Unit,
     private val mode: Mode = Mode.SHOP,
     private val dragStart: ((RecyclerView.ViewHolder) -> Unit)? = null,
-    private val onAdd: ((Int, String) -> Unit)? = null
+    private val onAdd: ((Int, String) -> Unit)? = null,
+    private val onRowDoubleTap: ((ShoppingItem) -> Unit)? = null
 ) : ListAdapter<ShoppingItem, RecyclerView.ViewHolder>(DIFF_CALLBACK) {
 
     init {
@@ -25,8 +27,6 @@ class ItemAdapter(
     }
 
     enum class Action { CHECK, FLAG, EDIT, DELETE }
-
-    enum class Mode { SHOP, PLAN }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         return if (viewType == VIEW_ADD) {
@@ -55,6 +55,12 @@ class ItemAdapter(
         private val binding: ItemShoppingBinding
     ) : RecyclerView.ViewHolder(binding.root) {
         fun bind(item: ShoppingItem) {
+            onRowDoubleTap?.let { callback ->
+                binding.root.setOnRowDoubleTapListener {
+                    val position = bindingAdapterPosition
+                    if (position != RecyclerView.NO_POSITION) callback(getItem(position))
+                }
+            }
             binding.tvName.text = item.name
             binding.chkPurchased.setOnCheckedChangeListener(null)
             binding.chkPurchased.isChecked = item.isChecked
@@ -98,6 +104,9 @@ class ItemAdapter(
 
             if (item.isHeading) {
                 binding.chkPurchased.isEnabled = false
+                // A disabled but clickable view still swallows touches, which
+                // would stop double taps on this part of the row.
+                binding.chkPurchased.isClickable = false
                 binding.btnFlag.isEnabled = false
                 binding.tvName.setTypeface(null, Typeface.BOLD)
                 val color = ContextCompat.getColor(binding.root.context, com.mmgpt.shoplistgpt.R.color.list_item_text)
@@ -105,6 +114,7 @@ class ItemAdapter(
                 binding.root.strokeWidth = 0
             } else {
                 binding.chkPurchased.isEnabled = true
+                binding.chkPurchased.isClickable = true
                 binding.btnFlag.isEnabled = mode == Mode.SHOP
                 binding.tvName.setTypeface(null, Typeface.NORMAL)
                 val color = ContextCompat.getColor(binding.root.context, com.mmgpt.shoplistgpt.R.color.list_item_text)

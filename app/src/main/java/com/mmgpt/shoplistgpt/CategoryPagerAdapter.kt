@@ -4,30 +4,25 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
 
-import com.mmgpt.shoplistgpt.PlanCategoryFragment
-import com.mmgpt.shoplistgpt.PlanCategoriesFragment
-
 class CategoryPagerAdapter(
     activity: FragmentActivity,
     private val viewModel: ShoppingListViewModel,
-    private val planMode: Boolean = false
+    val mode: Mode
 ) : FragmentStateAdapter(activity) {
-    override fun getItemCount(): Int =
-        (viewModel.categories.value?.size ?: 0) + 1
 
-    override fun createFragment(position: Int): Fragment =
-        if (planMode) {
-            if (position == 0) {
-                PlanCategoriesFragment()
-            } else {
-                PlanCategoryFragment.newInstance(position - 1)
-            }
-        } else {
-            val size = viewModel.categories.value?.size ?: 0
-            if (position == size) {
-                ShopCategoriesFragment()
-            } else {
-                CategoryFragment.newInstance(position)
-            }
+    private val layout: PageLayout
+        get() = PageLayout(mode, viewModel.categories.value?.size ?: 0)
+
+    override fun getItemCount(): Int = layout.pageCount
+
+    override fun createFragment(position: Int): Fragment {
+        val layout = layout
+        val index = layout.categoryIndexAt(position)
+        return when {
+            index == null && mode == Mode.PLAN -> PlanCategoriesFragment()
+            index == null -> ShopCategoriesFragment()
+            mode == Mode.PLAN -> PlanCategoryFragment.newInstance(index)
+            else -> CategoryFragment.newInstance(index)
         }
+    }
 }

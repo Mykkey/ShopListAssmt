@@ -36,7 +36,8 @@ class MainActivity : AppCompatActivity() {
 
     private var nextItemId = 0L
     private var nextCategoryId = 0L
-    private var inPlanMode = false
+    /** The mode on screen; null while the start page is showing. */
+    private var currentMode: Mode? = null
     private var touchStartX = 0f
 
     private val filePickerLauncher =
@@ -88,9 +89,8 @@ class MainActivity : AppCompatActivity() {
         nextCategoryId = viewModel.categories.value
             ?.maxOfOrNull { it.id }?.plus(1) ?: 0L
 
-        pagerAdapter = CategoryPagerAdapter(this, viewModel, false)
         binding.viewPager.orientation = ViewPager2.ORIENTATION_HORIZONTAL
-        binding.viewPager.adapter = pagerAdapter
+        setPagerMode(Mode.SHOP)
 
         val pagerRecyclerView = binding.viewPager.getChildAt(0) as RecyclerView
         pagerRecyclerView.setOnTouchListener { _, event ->
@@ -128,12 +128,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        startBinding.btnShop.setOnClickListener { showShopping() }
+        startBinding.btnShop.setOnClickListener { showMode(Mode.SHOP) }
         startBinding.btnImport.setOnClickListener { pickCsvFile() }
-        startBinding.btnPlan.setOnClickListener { showPlanning() }
+        startBinding.btnPlan.setOnClickListener { showMode(Mode.PLAN) }
         startBinding.btnExport.setOnClickListener { promptForExport() }
 
-        showStartPage()
+        showMode(null)
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_home -> {
-                showStartPage()
+                showMode(null)
                 true
             }
             else -> super.onOptionsItemSelected(item)
@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         if (binding.viewPager.visibility == View.VISIBLE) {
-            showStartPage()
+            showMode(null)
         } else {
             super.onBackPressed()
         }
@@ -203,7 +203,7 @@ class MainActivity : AppCompatActivity() {
             viewModel.setCategories(
                 listOf(ShoppingCategory(nextCategoryId++, "Items", items))
             )
-            showShopping()
+            showMode(Mode.SHOP)
         }
     }
 
@@ -259,7 +259,7 @@ class MainActivity : AppCompatActivity() {
             }
             workbook.close()
             viewModel.setCategories(categories)
-            showShopping()
+            showMode(Mode.SHOP)
         }
     }
 
@@ -320,49 +320,47 @@ class MainActivity : AppCompatActivity() {
         Toast.makeText(this, "Exported", Toast.LENGTH_SHORT).show()
     }
 
-    private fun showStartPage() {
-        // `startPage` is an included layout so we need its root view to
-        // control visibility.
-        binding.startPage.root.visibility = View.VISIBLE
-        binding.viewPager.visibility = View.GONE
-        supportActionBar?.title = getString(R.string.app_name)
-        if (inPlanMode) {
-            val updated = viewModel.categories.value?.map { cat ->
-                cat.copy(items = cat.items.map { it.copy(isStruck = it.isChecked) })
-            } ?: emptyList()
-            viewModel.setCategories(updated)
-            pagerAdapter = CategoryPagerAdapter(this, viewModel, false)
-            binding.viewPager.adapter = pagerAdapter
-            inPlanMode = false
-        }
-    }
-
-    private fun showShopping() {
-        binding.startPage.root.visibility = View.GONE
-        binding.viewPager.visibility = View.VISIBLE
-        val date = viewModel.planDate.value
-        val title = if (date != null) {
-            val fmt = DateTimeFormatter.ofPattern("d MMM")
-            getString(R.string.shop_with_date, date.format(fmt))
-        } else {
-            getString(R.string.shop)
-        }
-        supportActionBar?.title = title
-    }
-
-    private fun showPlanning() {
-        val planned = viewModel.categories.value?.map { cat ->
-            cat.copy(items = cat.items.map { it.copy(isStruck = true) })
-        } ?: return
-        viewModel.setCategories(planned)
-        val today = LocalDate.now()
-        viewModel.setPlanDate(today)
-        pagerAdapter = CategoryPagerAdapter(this, viewModel, true)
+    private fun setPagerMode(mode: Mode) {
+        pagerAdapter = CategoryPagerAdapter(this, viewModel, mode)
         binding.viewPager.adapter = pagerAdapter
-        binding.startPage.root.visibility = View.GONE
-        binding.viewPager.visibility = View.VISIBLE
+    }
+
+    /** Shows the start page ([target] == null), or the pager in Shop or Plan mode. */
+    private fun showMode(target: Mode?) {
+        val leavingPlan = currentMode == Mode.PLAN && target != Mode.PLAN
+        if (leavingPlan) {
+            // Items checked off while planning are the ones already at home.
+            viewModel.setCategories(
+                viewModel.categories.value?.map { cat ->
+                    cat.copy(items = cat.items.map { it.copy(isStruck = it.isChecked) })
+                } ?: emptyList()
+            )
+        }
+        if (target == Mode.PLAN) {
+            val planned = viewModel.categories.value?.map { cat ->
+                cat.copy(items = cat.items.map { it.copy(isStruck = true) })
+            } ?: return
+            viewModel.setCategories(planned)
+            viewModel.setPlanDate(LocalDate.now())
+        }
+
+        val pagerMode = target ?: Mode.SHOP
+        if (pagerAdapter.mode != pagerMode) setPagerMode(pagerMode)
+
+        binding.startPage.root.visibility = if (target == null) View.VISIBLE else View.GONE
+        binding.viewPager.visibility = if (target == null) View.GONE else View.VISIBLE
+        supportActionBar?.title = titleFor(target)
+        currentMode = target
+    }
+
+    private fun titleFor(mode: Mode?): String {
         val fmt = DateTimeFormatter.ofPattern("d MMM")
-        supportActionBar?.title = getString(R.string.plan_with_date, today.format(fmt))
-        inPlanMode = true
+        return when (mode) {
+            null -> getString(R.string.app_name)
+            Mode.PLAN -> getString(R.string.plan_with_date, LocalDate.now().format(fmt))
+            Mode.SHOP -> viewModel.planDate.value
+                ?.let { getString(R.string.shop_with_date, it.format(fmt)) }
+                ?: getString(R.string.shop)
+        }
     }
 }

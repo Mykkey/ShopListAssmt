@@ -72,7 +72,7 @@ class PlanCategoryFragment : Fragment() {
                     else -> {}
                 }
             },
-            mode = ItemAdapter.Mode.PLAN,
+            mode = Mode.PLAN,
             dragStart = { vh -> dragHelper.startDrag(vh) },
             onAdd = { position, name ->
                 viewModel.addItem(index, position - 1, name)
